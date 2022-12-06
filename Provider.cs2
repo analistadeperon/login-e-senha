@@ -1,0 +1,288 @@
+using MeuProjeto.Core.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Security;
+
+namespace MeuProjeto.Infrastructure
+{
+    public class CustomRoleProvider : RoleProvider
+    {
+        public override void AddUsersToRoles(string[] usernames, string[] roleNames)
+        {
+            try
+            {
+                using (var context = new MeuProjetoContext())
+                {
+                    foreach (string username in usernames)
+                    {
+                        // find each user in users table
+                        var user = context.Usuarios.Where(u => u.Email == username).FirstOrDefault();
+
+                        if (user != null)
+                        {
+                            // find all roles that are contained in the roleNames
+                            var AllDbRoles = context.Roles.ToList();
+
+                            List<Role> UserRoles = new List<Role>();
+
+                            foreach (var roleName in roleNames)
+                            {
+                                var role = context.Roles.SingleOrDefault(r => r.Name == roleName);
+
+                                if (role == default(Role))
+                                {
+                                    throw new Exception("Role does not exist.");
+                                }
+
+                                UserRoles.Add(role);
+                            }
+
+
+                            if (UserRoles.Count > 0)
+                            {
+                                foreach (var role in UserRoles)
+                                {
+                                    if (!context.UserRoles.Where(ur => ur.UsuarioId == user.UsuarioId && ur.RoleId == role.RoleId).Any())
+                                    {
+                                        var userRole = new UserRole();
+                                        userRole.UserRoleId = Guid.NewGuid();
+                                        userRole.Usuario = user;
+                                        userRole.Role = role;
+                                        context.UserRoles.Add(userRole);
+                                        context.SaveChanges();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+        }
+
+        public override void CreateRole(string roleName)
+        {
+            try
+            {
+                if (!RoleExists(roleName))
+                {
+                    using (var context = new MeuProjetoContext())
+                    {
+                        Role role = new Role();
+                        role.RoleId = Guid.NewGuid();
+                        role.Name = roleName;
+                        context.Roles.Add(role);
+                        context.SaveChanges();
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                throw e;
+            }
+        }
+
+        public override bool DeleteRole(string roleName, bool throwOnPopulatedRole)
+        {
+            using (var context = new MeuProjetoContext())
+            {
+                try
+                {
+                    Role role = context.Roles.Where(r => r.Name == roleName).SingleOrDefault();
+
+                    if (role != null)
+                    {
+                        context.Roles.Remove(role);
+                        context.SaveChanges();
+                        return true;
+                    }
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
+        public override string[] FindUsersInRole(string roleName, string usernameToMatch)
+        {
+            List<string> users = new List<string>();
+
+            using (var context = new MeuProjetoContext())
+            {
+                try
+                {
+                    var usersInRole = context.UserRoles.Where(ur => ur.Role.Name == roleName && ur.Usuario.Email == usernameToMatch).ToList();
+
+                    if (usersInRole != null)
+                    {
+                        foreach (var userInRole in usersInRole)
+                        {
+                            users.Add(userInRole.Usuario.Email);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return users.ToArray();
+        }
+
+        public override string[] GetAllRoles()
+        {
+            List<string> roles = new List<string>();
+
+            using (var context = new MeuProjetoContext())
+            {
+                try
+                {
+                    var dbRoles = context.Roles.ToList();
+
+                    foreach (var role in dbRoles)
+                    {
+                        roles.Add(role.Name);
+                    }
+                }
+                catch { }
+            }
+
+            return roles.ToArray();
+        }
+
+        public override string[] GetRolesForUser(string username)
+        {
+            List<string> roles = new List<string>();
+
+            using (var context = new MeuProjetoContext())
+            {
+                try
+                {
+                    var dbRoles = context.UserRoles.Where(r => r.Usuario.Email == username).ToList();
+
+                    foreach (var role in dbRoles)
+                    {
+                        roles.Add(role.Role.Name);
+                    }
+                }
+                catch { }
+            }
+
+            return roles.ToArray();
+        }
+
+        public override string[] GetUsersInRole(string roleName)
+        {
+            List<string> users = new List<string>();
+
+            using (var context = new MeuProjetoContext())
+            {
+                try
+                {
+                    var usersInRole = context.UserRoles.Where(ur => ur.Role.Name == roleName).ToList();
+
+                    if (usersInRole != null)
+                    {
+                        foreach (var userInRole in usersInRole)
+                        {
+                            users.Add(userInRole.Usuario.Email);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return users.ToArray();
+        }
+
+        public override bool IsUserInRole(string username, string roleName)
+        {
+            using (var context = new MeuProjetoContext())
+            {
+                try
+                {
+                    var usersInRole = context.UserRoles.SingleOrDefault(ur => ur.Usuario.Email == username && ur.Role.Name == roleName);
+
+                    if (usersInRole != default(UserRole))
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw ex;
+                }
+            }
+
+            return false;
+        }
+
+        public override void RemoveUsersFromRoles(string[] usernames, string[] roleNames)
+        {
+            try
+            {
+                using (var context = new MeuProjetoContext())
+                {
+                    foreach (string username in usernames)
+                    {
+                        // find each user in users table
+                        var user = context.Usuarios.Where(u => u.Email == username).SingleOrDefault();
+
+                        if (user != null)
+                        {
+                            // find all roles that are contained in the roleNames
+                            var AllDbRoles = context.Roles.ToList();
+
+                            List<Role> RemoveRoles = new List<Role>();
+
+                            foreach (var role in AllDbRoles)
+                            {
+                                foreach (string roleName in roleNames)
+                                {
+                                    if (role.Name == roleName)
+                                    {
+                                        RemoveRoles.Add(role);
+                                        continue;
+                                    }
+                                }
+                            }
+
+                            if (RemoveRoles.Count > 0)
+                            {
+                                foreach (var role in RemoveRoles)
+                                {
+                                    UserRole userRole = context.UserRoles
+                                                            .Where(ur => ur.UsuarioId == user.UsuarioId && ur.RoleId == role.RoleId)
+                                                            .SingleOrDefault();
+
+                                    if (userRole != null)
+                                    {
+                                        context.UserRoles.Remove(userRole);
+                                        context.SaveChanges();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            catch { }
+        }
+
+        public override bool RoleExists(string roleName)
+        {
+            using (var context = new MeuProjetoContext())
+            {
+                // check if role exits
+                return context.Roles.Any(r => r.Name == roleName);              
+            }
+        }
+    }
+}
